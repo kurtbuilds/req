@@ -3,6 +3,7 @@ use clap::Arg;
 use colored::Colorize;
 use httpclient::middleware::{FollowRedirectsMiddleware, Next};
 use httpclient::{Body, Error, Middleware, Request, Response};
+use std::fs;
 use std::str::FromStr;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -155,10 +156,15 @@ async fn main() {
     builder = builder.headers(headers.clone().into_iter());
     let res = builder.send().await.unwrap();
     if matches.is_present("remote-name") {
-        println!("{}", res.remote_name());
+        let url = httpclient::Uri::from_str(&url).unwrap();
+        let filename = std::path::Path::new(url.path())
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let bytes = res.bytes().await.unwrap();
+        fs::write(filename, bytes).unwrap();
     } else {
         println!("{}", res.text().await.unwrap());
-        println!("{}", res.status());
-        println!("{}", res.body());
     }
 }
