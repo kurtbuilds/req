@@ -1,6 +1,6 @@
 use clap::Arg;
-use httpmock2::{Body, Error, Middleware, Request, Response};
-use httpmock2::middleware::{FollowRedirectsMiddleware, LoggerMiddleware, Next};
+use httpclient::{Body, Error, Middleware, Request, Response};
+use httpclient::middleware::{FollowRedirectsMiddleware, LoggerMiddleware, Next};
 use serde_json::json;
 use async_trait::async_trait;
 use colored::Colorize;
@@ -111,11 +111,11 @@ async fn main() {
         })
         .collect::<Vec<_>>();
     let method = if matches.is_present("post") {
-        httpmock2::Method::POST
+        httpclient::Method::POST
     } else {
-        httpmock2::Method::GET
+        httpclient::Method::GET
     };
-    let client = httpmock2::Client::new(None)
+    let client = httpclient::Client::new(None)
         .with_middleware(FollowRedirectsMiddleware {})
         .with_middleware(VerboseMiddleware {})
         ;
@@ -134,7 +134,7 @@ async fn main() {
         }
         _ => panic!("Unsupported method"),
     };
-    builder = builder.headers(headers.iter());
+    builder = builder.headers(headers.clone().into_iter());
     let res = builder
         .send()
         .await
