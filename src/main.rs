@@ -14,15 +14,15 @@ pub struct VerboseMiddleware;
 #[async_trait]
 impl Middleware for VerboseMiddleware {
     async fn handle(&self, request: Request, next: Next<'_>) -> Result<Response, Error> {
-        println!("{} {}", request.method(), request.url());
+        eprintln!("{} {}", request.method(), request.url());
         if !request.headers().is_empty() {
-            println!("Headers:");
+            eprintln!("Headers:");
         }
         for (key, value) in request.headers() {
-            println!("{}: {}", key, value.to_str().unwrap());
+            eprintln!("{}: {}", key, value.to_str().unwrap());
         }
         if !request.body().is_empty() {
-            println!("Body:");
+            eprintln!("Body:");
             match request.body().try_clone().unwrap() {
                 Body::Empty => {}
                 Body::Bytes(b) => println!("<{} bytes>", b.len()),
@@ -31,19 +31,19 @@ impl Middleware for VerboseMiddleware {
                 Body::Json(j) => println!("{}", serde_json::to_string_pretty(&j).unwrap()),
             };
         }
-        println!("==========");
+        eprintln!("==========");
         let res = next.run(request).await;
         match &res {
             Ok(res) => {
-                println!("{}", res.status());
+                eprintln!("{}", res.status());
                 if !res.headers().is_empty() {
-                    println!("Headers:");
+                    eprintln!("Headers:");
                 }
                 for (key, value) in res.headers() {
-                    println!("{}: {}", key, value.to_str().unwrap());
+                    eprintln!("{}: {}", key, value.to_str().unwrap());
                 }
             }
-            Err(err) => println!("{:?}", err),
+            Err(err) => eprintln!("{:?}", err),
         }
         res
     }
@@ -62,9 +62,13 @@ pub fn examples(pairs: Vec<(&'static str, &'static str)>) -> String {
     )
 }
 
-pub fn split_pair(pair: &str) -> (&str, &str) {
-    let mut iter = pair.splitn(2, '=');
-    (iter.next().unwrap(), iter.next().unwrap())
+pub fn split_pair(pair: &str, sep: char) -> Option<(&str, &str)> {
+    let mut iter = pair.splitn(2, sep);
+    if let (Some(a), Some(b)) = (iter.next(), iter.next()) {
+        Some((a, b))
+    } else {
+        None
+    }
 }
 
 #[tokio::main]
@@ -119,16 +123,16 @@ async fn main() {
     let params = matches
         .values_of("params")
         .unwrap_or_default()
-        .map(split_pair)
+        .map(|v| split_pair(v, '=').unwrap())
         .collect::<Vec<_>>();
     let headers = matches
         .values_of("headers")
         .unwrap_or_default()
-        .map(split_pair)
+        .map(|v| split_pair(v, '=').or_else(|| split_pair(v, ':')).unwrap())
         .collect::<Vec<_>>();
     let method = matches
         .value_of("method")
-        .map(|v| httpclient::Method::from_str(v).unwrap())
+        .map(|v| httpclient::Method::from_str(&v.to_uppercase()).unwrap())
         .unwrap_or_else(|| {
             if matches.is_present("json") {
                 httpclient::Method::POST
@@ -145,12 +149,13 @@ async fn main() {
         builder = builder.push_query(&k, &v);
     }
     if let Some(json) = matches.values_of("json") {
-        let obj = json
-            .map(split_pair)
-            .fold(serde_json::Map::new(), |mut acc, (k, v)| {
+        let obj = json.map(|v| split_pair(v, '=').unwrap()).fold(
+            serde_json::Map::new(),
+            |mut acc, (k, v)| {
                 acc.insert(k.to_string(), serde_json::Value::String(v.to_string()));
                 acc
-            });
+            },
+        );
         builder = builder.push_json(serde_json::Value::Object(obj));
     };
     builder = builder.headers(headers.clone().into_iter());
@@ -168,3 +173,6 @@ async fn main() {
         println!("{}", res.text().await.unwrap());
     }
 }
+
+#[cfg(test)]
+mod tests {}
