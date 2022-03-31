@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use async_trait::async_trait;
 use clap::Arg;
 use colored::Colorize;
@@ -88,7 +89,7 @@ async fn main() {
                     "req --post localhost:5000/signup email=test@example.com password=test",
                 ),
             ])
-            .as_str(),
+                .as_str(),
         )
         .arg(
             Arg::new("headers")
@@ -97,6 +98,7 @@ async fn main() {
                 .long("header")
                 .short('H'),
         )
+        .arg(Arg::new("bearer").takes_value(true).long("bearer"))
         .arg(Arg::new("remote-name").short('O').long("remote-name"))
         .arg(Arg::new("verbose").long("verbose").short('v'))
         .arg(
@@ -125,11 +127,15 @@ async fn main() {
         .unwrap_or_default()
         .map(|v| split_pair(v, '=').unwrap())
         .collect::<Vec<_>>();
-    let headers = matches
+    let mut headers = matches
         .values_of("headers")
         .unwrap_or_default()
         .map(|v| split_pair(v, '=').or_else(|| split_pair(v, ':')).unwrap())
+        .map(|(k, v)| (k, Cow::Borrowed(v)))
         .collect::<Vec<_>>();
+    if let Some(bearer) = matches.value_of("bearer") {
+        headers.push(("Authorization", Cow::Owned(format!("Bearer {}", bearer))));
+    }
     let method = matches
         .value_of("method")
         .map(|v| httpclient::Method::from_str(&v.to_uppercase()).unwrap())
@@ -158,7 +164,7 @@ async fn main() {
         );
         builder = builder.push_json(serde_json::Value::Object(obj));
     };
-    builder = builder.headers(headers.clone().into_iter());
+    builder = builder.headers(headers.clone().iter().map(|(k, v)| (*k, v.as_ref())));
     let res = builder.send().await.unwrap();
     if matches.is_present("remote-name") {
         let url = httpclient::Uri::from_str(&url).unwrap();
