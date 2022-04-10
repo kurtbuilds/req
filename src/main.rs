@@ -120,6 +120,9 @@ async fn main() {
 
     let mut url = matches.value_of("url").unwrap().to_string();
     if !url.starts_with("http") {
+        if url.starts_with(":") {
+            url = format!("localhost{}", url);
+        }
         url = format!("http://{}", url);
     }
     let params = matches
