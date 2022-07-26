@@ -86,7 +86,11 @@ async fn main() {
                 ),
                 (
                     "Sends a POST request with a JSON body.",
-                    "req --post localhost:5000/signup email=test@example.com password=test",
+                    "req localhost:5000/signup --json email=test@example.com password=test",
+                ),
+                (
+                    "Sends a JSON POST request with URL params. URL params before --json, JSON body after --json.",
+                    "req localhost:5000/search cache=0 --json query='search query'",
                 ),
             ])
                 .as_str(),
@@ -98,8 +102,21 @@ async fn main() {
                 .long("header")
                 .short('H'),
         )
-        .arg(Arg::new("bearer").takes_value(true).long("bearer"))
-        .arg(Arg::new("remote-name").short('O').long("remote-name"))
+        .arg(Arg::new("bearer")
+            .takes_value(true)
+            .long("bearer")
+            .help("Sets header `Authorization: Bearer <value>`")
+        )
+        .arg(Arg::new("token")
+            .takes_value(true)
+            .long("token")
+            .help("Sets header `Authorization: Token <value>`")
+        )
+        .arg(Arg::new("remote-name")
+            .short('O')
+            .long("remote-name")
+            .help("Behaves like curl -O. Save the response to a file with the same name as the remote URL.")
+        )
         .arg(Arg::new("verbose").long("verbose").short('v'))
         .arg(
             Arg::new("method")
@@ -114,7 +131,6 @@ async fn main() {
                 .takes_value(true)
                 .multiple_values(true)
                 .long("json")
-                .short('j'),
         )
         .get_matches();
 
