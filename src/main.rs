@@ -95,22 +95,22 @@ async fn main() {
             ])
                 .as_str(),
         )
-        .arg(
-            Arg::new("headers")
-                .multiple_occurrences(true)
-                .takes_value(true)
-                .long("header")
-                .short('H'),
+        .arg(Arg::new("headers")
+            .multiple_occurrences(true)
+            .takes_value(true)
+            .long("header")
+            .short('H')
+            .help("Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")
         )
         .arg(Arg::new("bearer")
             .takes_value(true)
             .long("bearer")
-            .help("Sets header `Authorization: Bearer <value>`")
+            .help("Sets header `Authorization: Bearer <value>`.")
         )
         .arg(Arg::new("token")
             .takes_value(true)
             .long("token")
-            .help("Sets header `Authorization: Token <value>`")
+            .help("Sets header `Authorization: Token <value>`.")
         )
         .arg(Arg::new("remote-name")
             .short('O')
@@ -118,19 +118,26 @@ async fn main() {
             .help("Behaves like curl -O. Save the response to a file with the same name as the remote URL.")
         )
         .arg(Arg::new("verbose").long("verbose").short('v'))
-        .arg(
-            Arg::new("method")
-                .long("method")
-                .short('m')
-                .takes_value(true),
+        .arg(Arg::new("method")
+            .long("method")
+            .short('m')
+            .takes_value(true)
+            .help("Sets the request method. Defaults to GET. Behaves like curl -X.")
         )
-        .arg(Arg::new("url").required(true))
-        .arg(Arg::new("params").multiple_occurrences(true))
+        .arg(Arg::new("url")
+            .required(true)
+            .help("<url> is permissive for valid values. Can be :5000, localhost:3000, https://www.google.com, etc.")
+        )
+        .arg(Arg::new("params")
+            .multiple_occurrences(true)
+            .help("Sets URL query params. It urlencodes the provided values.")
+        )
         .arg(
             Arg::new("json")
                 .takes_value(true)
                 .multiple_values(true)
                 .long("json")
+                .help("Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair."),
         )
         .get_matches();
 
@@ -141,19 +148,26 @@ async fn main() {
         }
         url = format!("http://{}", url);
     }
+
     let params = matches
         .values_of("params")
         .unwrap_or_default()
         .map(|v| split_pair(v, '=').unwrap())
         .collect::<Vec<_>>();
+
     let mut headers = matches
         .values_of("headers")
         .unwrap_or_default()
         .map(|v| split_pair(v, '=').or_else(|| split_pair(v, ':')).unwrap())
         .map(|(k, v)| (k, Cow::Borrowed(v)))
         .collect::<Vec<_>>();
+
     if let Some(bearer) = matches.value_of("bearer") {
         headers.push(("Authorization", Cow::Owned(format!("Bearer {}", bearer))));
+    }
+
+    if let Some(token) = matches.value_of("token") {
+        headers.push(("Authorization", Cow::Owned(format!("Token {}", token))));
     }
     let method = matches
         .value_of("method")
