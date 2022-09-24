@@ -1,6 +1,6 @@
 [package]
 name = "req"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "CLI Http Client. Built-in support for building JSON bodies & more."
 license = "MIT"
