@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use async_trait::async_trait;
-use clap::Arg;
+use clap::{Arg, Values};
 use colored::Colorize;
 use httpclient::middleware::{FollowRedirectsMiddleware, Next};
 use httpclient::{Body, Error, Middleware, Request, Response};
@@ -63,13 +63,25 @@ pub fn examples(pairs: Vec<(&'static str, &'static str)>) -> String {
     )
 }
 
-pub fn split_pair(pair: &str, sep: char) -> Option<(&str, &str)> {
+pub fn split_pair<'a>(pair: &'a str, sep: &[char]) -> Option<(&'a str, &'a str)> {
     let mut iter = pair.splitn(2, sep);
     if let (Some(a), Some(b)) = (iter.next(), iter.next()) {
         Some((a, b))
     } else {
         None
     }
+}
+
+
+fn build_map(values: Values) -> serde_json::Value {
+    let obj = values.map(|v| split_pair(v, &['=', ':']).unwrap()).fold(
+        serde_json::Map::new(),
+        |mut acc, (k, v)| {
+            acc.insert(k.to_string(), serde_json::Value::String(v.to_string()));
+            acc
+        },
+    );
+    serde_json::Value::Object(obj)
 }
 
 #[tokio::main]
@@ -124,6 +136,12 @@ async fn main() {
             .takes_value(true)
             .help("Sets the request method. Defaults to GET. Behaves like curl -X.")
         )
+        .arg(Arg::new("user")
+            .long("user")
+            .short('u')
+            .takes_value(true)
+            .help("Sets the request method. Defaults to GET. Behaves like curl -X.")
+        )
         .arg(Arg::new("url")
             .required(true)
             .help("<url> is permissive for valid values. Can be :5000, localhost:3000, https://www.google.com, etc.")
@@ -139,6 +157,13 @@ async fn main() {
                 .long("json")
                 .help("Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair."),
         )
+        .arg(
+            Arg::new("form")
+                .takes_value(true)
+                .multiple_values(true)
+                .long("form")
+                .help("Sets form body. --form is greedy, so every value after it is treated as a form key/value pair."),
+        )
         .get_matches();
 
     let mut url = matches.value_of("url").unwrap().to_string();
@@ -152,33 +177,43 @@ async fn main() {
     let params = matches
         .values_of("params")
         .unwrap_or_default()
-        .map(|v| split_pair(v, '=').unwrap())
+        .map(|v| split_pair(v, &['=', ':']).unwrap())
         .collect::<Vec<_>>();
 
     let mut headers = matches
         .values_of("headers")
         .unwrap_or_default()
-        .map(|v| split_pair(v, '=').or_else(|| split_pair(v, ':')).unwrap())
+        .map(|v| split_pair(v, &['=', ':']).unwrap())
         .map(|(k, v)| (k, Cow::Borrowed(v)))
         .collect::<Vec<_>>();
 
+    // Set bearer
     if let Some(bearer) = matches.value_of("bearer") {
         headers.push(("Authorization", Cow::Owned(format!("Bearer {}", bearer))));
     }
 
+    // Set token
     if let Some(token) = matches.value_of("token") {
         headers.push(("Authorization", Cow::Owned(format!("Token {}", token))));
     }
+
+    // Set user
+    if let Some(user) = matches.value_of("user") {
+        let base64 = base64::encode(user);
+        headers.push(("Authorization", Cow::Owned(format!("Basic {}", base64))));
+    }
+
     let method = matches
         .value_of("method")
         .map(|v| httpclient::Method::from_str(&v.to_uppercase()).unwrap())
         .unwrap_or_else(|| {
-            if matches.is_present("json") {
+            if matches.is_present("json") || matches.is_present("form") {
                 httpclient::Method::POST
             } else {
                 httpclient::Method::GET
             }
         });
+
     let mut client = httpclient::Client::new(None).with_middleware(FollowRedirectsMiddleware {});
     if matches.is_present("verbose") {
         client = client.with_middleware(VerboseMiddleware {});
@@ -187,16 +222,21 @@ async fn main() {
     for (k, v) in params {
         builder = builder.push_query(&k, &v);
     }
+
     if let Some(json) = matches.values_of("json") {
-        let obj = json.map(|v| split_pair(v, '=').unwrap()).fold(
-            serde_json::Map::new(),
-            |mut acc, (k, v)| {
-                acc.insert(k.to_string(), serde_json::Value::String(v.to_string()));
-                acc
-            },
-        );
-        builder = builder.push_json(serde_json::Value::Object(obj));
+        let obj = build_map(json);
+        builder = builder.push_json(obj);
+        headers.push(("Content-Type", Cow::Borrowed("application/json")));
+        headers.push(("Accept", Cow::Borrowed("application/json")));
     };
+
+    if let Some(form) = matches.values_of("form") {
+        let obj = build_map(form);
+        builder = builder.set_body(Body::Text(serde_urlencoded::to_string(&obj).unwrap()));
+        headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
+        headers.push(("Accept", Cow::Borrowed("*/*")));
+    };
+
     builder = builder.headers(headers.clone().iter().map(|(k, v)| (*k, v.as_ref())));
     let res = builder.send().await.unwrap();
     if matches.is_present("remote-name") {
