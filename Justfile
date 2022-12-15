@@ -1,4 +1,5 @@
 set dotenv-load := false
+set positional-arguments
 
 help:
     @just --list --unsorted
@@ -8,7 +9,7 @@ build:
 alias b := build
 
 run *args:
-    cargo run {{args}}
+    cargo run "$@"
 alias r := run
 
 release:

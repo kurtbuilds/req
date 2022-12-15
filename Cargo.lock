@@ -281,9 +281,9 @@ checksum = "d897f394bad6a705d5f4104762e116a75639e470d80901eed05a860a95cb1904"
 
 [[package]]
 name = "httpclient"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8e429ba006f37a273e356d514b2f4f7f46bcfe791c1a35071ac5ea39a287403"
+checksum = "bd5d70383f3ab8232cb265ed6517823cc820a46022d11af040e1b2b284939335"
 dependencies = [
  "async-trait",
  "encoding_rs",

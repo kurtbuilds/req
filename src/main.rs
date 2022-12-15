@@ -177,13 +177,13 @@ async fn main() {
     let params = matches
         .values_of("params")
         .unwrap_or_default()
-        .map(|v| split_pair(v, &['=', ':']).unwrap())
+        .map(|v| split_pair(v, &['=', ':']).expect("Params must be in the form of key=value or key:value"))
         .collect::<Vec<_>>();
 
     let mut headers = matches
         .values_of("headers")
         .unwrap_or_default()
-        .map(|v| split_pair(v, &['=', ':']).unwrap())
+        .map(|v| split_pair(v, &['=', ':']).expect("Headers must be in the form of key=value or key:value"))
         .map(|(k, v)| (k, Cow::Borrowed(v)))
         .collect::<Vec<_>>();
 
@@ -205,7 +205,7 @@ async fn main() {
 
     let method = matches
         .value_of("method")
-        .map(|v| httpclient::Method::from_str(&v.to_uppercase()).unwrap())
+        .map(|v| httpclient::Method::from_str(&v.to_uppercase()).expect("Method must be one of: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, TRACE, CONNECT"))
         .unwrap_or_else(|| {
             if matches.is_present("json") || matches.is_present("form") {
                 httpclient::Method::POST
@@ -227,12 +227,14 @@ async fn main() {
         let obj = build_map(json);
         builder = builder.push_json(obj);
         headers.push(("Content-Type", Cow::Borrowed("application/json")));
-        headers.push(("Accept", Cow::Borrowed("application/json")));
+        if !headers.iter().any(|(h, _)| *h == "Accept") {
+            headers.push(("Accept", Cow::Borrowed("application/json")));
+        }
     };
 
     if let Some(form) = matches.values_of("form") {
         let obj = build_map(form);
-        builder = builder.set_body(Body::Text(serde_urlencoded::to_string(&obj).unwrap()));
+        builder = builder.set_body(Body::Text(serde_urlencoded::to_string(&obj).expect("Failed to encode as form-urlencoded.")));
         headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
         headers.push(("Accept", Cow::Borrowed("*/*")));
     };
