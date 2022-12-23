@@ -140,7 +140,7 @@ async fn main() {
             .long("user")
             .short('u')
             .takes_value(true)
-            .help("Sets the request method. Defaults to GET. Behaves like curl -X.")
+            .help("Sets user authentication header. Behaves like curl -u. Example: `-u username:password`. `username:password` is base64-encoded, and header `Authorization: Basic <base64>` is set.")
         )
         .arg(Arg::new("url")
             .required(true)
@@ -227,7 +227,7 @@ async fn main() {
         let obj = build_map(json);
         builder = builder.push_json(obj);
         headers.push(("Content-Type", Cow::Borrowed("application/json")));
-        if !headers.iter().any(|(h, _)| *h == "Accept") {
+        if !headers.iter().any(|(h, _)| h.to_lowercase() == "accept") {
             headers.push(("Accept", Cow::Borrowed("application/json")));
         }
     };
