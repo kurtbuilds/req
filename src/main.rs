@@ -75,14 +75,20 @@ pub fn split_pair<'a>(pair: &'a str, sep: &[char]) -> Option<(&'a str, &'a str)>
 
 
 fn build_map(values: Values) -> serde_json::Value {
-    let obj = values.map(|v| split_pair(v, &['=', ':']).unwrap()).fold(
-        serde_json::Map::new(),
-        |mut acc, (k, v)| {
-            acc.insert(k.to_string(), serde_json::Value::String(v.to_string()));
-            acc
-        },
-    );
-    serde_json::Value::Object(obj)
+    let mut map = serde_json::Map::new();
+    for pair in values {
+        let (key, value) = pair.split_once(&['=', ':']).unwrap();
+        let mut parts = key.split('.');
+        let mut current = &mut map;
+        while let Some(part) = parts.next() {
+            if parts.next().is_none() {
+                current.insert(part.to_string(), serde_json::Value::String(value.to_string()));
+            } else {
+                current = current.entry(part.to_string()).or_insert_with(|| serde_json::Value::Object(serde_json::Map::new())).as_object_mut().unwrap();
+            }
+        }
+    }
+    serde_json::Value::Object(map)
 }
 
 #[tokio::main]
