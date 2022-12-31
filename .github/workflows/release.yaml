@@ -60,9 +60,11 @@ jobs:
     - name: Set env var to fix https://github.com/briansmith/ring/issues/1559 - x86_64
       if: ${{ matrix.target == 'x86_64-unknown-linux-musl' }}
       run: |
+        apt-get install musl-tools clang llvm -y
         TARGET=x86_64-unknown-linux-musl
         echo "TARGET_CC=${TARGET}-gcc" >> $GITHUB_ENV
         echo "TARGET_AR=${TARGET}-ar" >> $GITHUB_ENV
+        echo "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"
     - name: Set env var to fix https://github.com/briansmith/ring/issues/1559 - aarch64
       if: ${{ matrix.target == 'aarch64-unknown-linux-musl' }}
       run: |
