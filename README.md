@@ -10,12 +10,6 @@
 <a href="https://github.com/kurtbuilds/req/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/kurtbuilds/req/test.yaml?style=flat-square" alt="Build Status" />
 </a>
-<a href="https://crates.io/crates/req">
-    <img src="https://img.shields.io/crates/d/req?style=flat-square" alt="Downloads" />
-</a>
-<a href="https://crates.io/crates/req">
-    <img src="https://img.shields.io/crates/v/req?style=flat-square" alt="Crates.io" />
-</a>
 
 </p>
 
