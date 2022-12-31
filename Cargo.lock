@@ -537,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "req"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "async-trait",
  "base64 0.20.0",
