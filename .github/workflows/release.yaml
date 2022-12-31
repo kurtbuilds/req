@@ -61,7 +61,7 @@ jobs:
       if: ${{ matrix.target == 'x86_64-unknown-linux-musl' }}
       run: |
         sudo apt-get update
-        sudo apt-get install musl-tools clang llvm linux-musl-dev
+        sudo apt-get install musl-tools clang llvm
         TARGET=x86_64-unknown-linux-musl
         echo "TARGET_CC=${TARGET}-gcc" >> $GITHUB_ENV
         echo "TARGET_AR=${TARGET}-ar" >> $GITHUB_ENV
