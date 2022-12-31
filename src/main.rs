@@ -6,6 +6,7 @@ use httpclient::middleware::{FollowRedirectsMiddleware, Next};
 use httpclient::{Body, Error, Middleware, Request, Response};
 use std::fs;
 use std::str::FromStr;
+use colored_json::ToColoredJson;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const NAME: &str = env!("CARGO_PKG_NAME");
@@ -85,7 +86,7 @@ fn build_map(values: Values) -> serde_json::Value {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = clap::Command::new(NAME)
         .version(VERSION)
         .arg_required_else_help(true)
@@ -113,6 +114,12 @@ async fn main() {
             .long("header")
             .short('H')
             .help("Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")
+        )
+        .arg(Arg::new("raw")
+            .takes_value(true)
+            .long("raw")
+            .short('r')
+            .help("By default, req makes an effort to pretty print the results. Right now, we only pretty print JSON. ")
         )
         .arg(Arg::new("bearer")
             .takes_value(true)
@@ -226,7 +233,6 @@ async fn main() {
     if let Some(json) = matches.values_of("json") {
         let obj = build_map(json);
         builder = builder.push_json(obj);
-        headers.push(("Content-Type", Cow::Borrowed("application/json")));
         if !headers.iter().any(|(h, _)| h.to_lowercase() == "accept") {
             headers.push(("Accept", Cow::Borrowed("application/json")));
         }
@@ -238,6 +244,7 @@ async fn main() {
         headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
         headers.push(("Accept", Cow::Borrowed("*/*")));
     };
+    let raw = matches.is_present("raw");
 
     builder = builder.headers(headers.clone().iter().map(|(k, v)| (*k, v.as_ref())));
     let res = builder.send().await.unwrap();
@@ -249,10 +256,19 @@ async fn main() {
             .to_str()
             .unwrap();
         let bytes = res.bytes().await.unwrap();
-        fs::write(filename, bytes).unwrap();
+        fs::write(filename, bytes).expect("Failed to write to file.");
     } else {
-        println!("{}", res.text().await.unwrap());
+        let expect_json = res.headers().get("Content-Type")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.starts_with("application/json"))
+            .unwrap_or(false);
+        let mut s = res.text().await.unwrap();
+        if !raw && expect_json {
+            s = s.to_colored_json_auto()?;
+        }
+        println!("{}", s);
     }
+    Ok(())
 }
 
 #[cfg(test)]

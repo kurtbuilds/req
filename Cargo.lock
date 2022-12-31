@@ -108,6 +108,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "colored_json"
+version = "3.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "633215cdbb84194508d4c07c08d06e92ee9d489d54e68d17913d8d1bacfcfdeb"
+dependencies = [
+ "atty",
+ "serde",
+ "serde_json",
+ "yansi",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -531,6 +543,7 @@ dependencies = [
  "base64 0.20.0",
  "clap",
  "colored",
+ "colored_json",
  "httpclient",
  "serde_json",
  "serde_urlencoded",
@@ -1107,3 +1120,9 @@ name = "windows_x86_64_msvc"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40009d85759725a34da6d89a94e63d7bdc50a862acf0dbc7c8e488f1edcb6f5"
+
+[[package]]
+name = "yansi"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
