@@ -27,7 +27,7 @@ most succinct, while still intuitive, client you'll find. Let's see if you agree
 ## Examples
 
 ```bash
-# Get localhost:5000/ . We assume localhost if the hostname is a bare port.
+# Get `localhost:5000/`. We assume localhost if the hostname is a bare port.
 req :5000
 ```
 
