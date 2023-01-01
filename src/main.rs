@@ -74,14 +74,15 @@ pub fn split_pair<'a>(pair: &'a str, sep: &[char]) -> Option<(&'a str, &'a str)>
 }
 
 
-fn build_map(values: Values) -> serde_json::Value {
+fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for pair in values {
         let (key, value) = pair.split_once(&['=', ':']).unwrap();
-        let mut parts = key.split('.');
+        let mut parts = key.split('.').peekable();
         let mut current = &mut map;
+        // 1. part=credential, parts=username
         while let Some(part) = parts.next() {
-            if parts.next().is_none() {
+            if parts.peek().is_none() {
                 current.insert(part.to_string(), serde_json::Value::String(value.to_string()));
             } else {
                 current = current.entry(part.to_string()).or_insert_with(|| serde_json::Value::Object(serde_json::Map::new())).as_object_mut().unwrap();
@@ -278,4 +279,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::build_map;
+
+    #[test]
+    fn test_build_map() {
+        let v = vec![
+            "credential.username=test@gmail.com",
+            "credential.password=foo",
+        ];
+        let result = build_map(v.into_iter());
+        assert_eq!(result["credential"]["username"], "test@gmail.com");
+        assert_eq!(result["credential"]["password"], "foo");
+    }
+}
