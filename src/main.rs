@@ -1,57 +1,34 @@
+mod middleware;
+
 use std::borrow::Cow;
-use async_trait::async_trait;
-use clap::{Arg, Values};
+use clap::{Parser};
 use colored::Colorize;
-use httpclient::middleware::{FollowRedirectsMiddleware, Next};
-use httpclient::{Body, Error, Middleware, Request, Response};
+use httpclient::middleware::{FollowRedirectsMiddleware};
+use httpclient::{Body};
 use std::fs;
 use std::str::FromStr;
+use base64::Engine;
 use colored_json::ToColoredJson;
+use middleware::VerboseMiddleware;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
-const NAME: &str = env!("CARGO_PKG_NAME");
+static EXAMPLES: &[(&'static str, &'static str)] = &[
+    ("Plain GET request", "req jsonip.com"),
+    (
+        "GET request with a URL encoded string",
+        "req jsonip.com apiKey='foo bar'",
+    ),
+    (
+        "Sends a POST request with a JSON body.",
+        "req localhost:5000/signup --json email=test@example.com password=test",
+    ),
+    (
+        "Sends a JSON POST request with URL params. URL params before --json, JSON body after --json.",
+        "req localhost:5000/search cache=0 --json query='search query'",
+    ),
+];
 
-pub struct VerboseMiddleware;
 
-#[async_trait]
-impl Middleware for VerboseMiddleware {
-    async fn handle(&self, request: Request, next: Next<'_>) -> Result<Response, Error> {
-        eprintln!("{} {}", request.method(), request.url());
-        if !request.headers().is_empty() {
-            eprintln!("Headers:");
-        }
-        for (key, value) in request.headers() {
-            eprintln!("{}: {}", key, value.to_str().unwrap());
-        }
-        if !request.body().is_empty() {
-            eprintln!("Body:");
-            match request.body().try_clone().unwrap() {
-                Body::Empty => {}
-                Body::Bytes(b) => println!("<{} bytes>", b.len()),
-                Body::Text(s) => println!("{}", s),
-                Body::Hyper(_) => {}
-                Body::Json(j) => println!("{}", serde_json::to_string_pretty(&j).unwrap()),
-            };
-        }
-        eprintln!("==========");
-        let res = next.run(request).await;
-        match &res {
-            Ok(res) => {
-                eprintln!("{}", res.status());
-                if !res.headers().is_empty() {
-                    eprintln!("Headers:");
-                }
-                for (key, value) in res.headers() {
-                    eprintln!("{}: {}", key, value.to_str().unwrap());
-                }
-            }
-            Err(err) => eprintln!("{:?}", err),
-        }
-        res
-    }
-}
-
-pub fn examples(pairs: Vec<(&'static str, &'static str)>) -> String {
+pub fn examples(pairs: &[(&'static str, &'static str)]) -> String {
     format!(
         "{}
     {}",
@@ -63,6 +40,51 @@ pub fn examples(pairs: Vec<(&'static str, &'static str)>) -> String {
             .join("\n\n    "),
     )
 }
+
+#[derive(Parser, Debug)]
+#[command(after_help(examples(EXAMPLES)))]
+#[command(author, version, about)]
+struct Cli {
+    #[arg(help = "<url> is permissive for valid values. Can be :5000, localhost:3000, https://www.google.com, etc.")]
+    url: String,
+
+    #[arg(help = "Sets URL query params. It urlencodes the provided values.")]
+    params: Vec<String>,
+
+    #[arg(long, num_args = 0.., help = r#"Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair. Dots in keys are treated as nested objects. For example, --json foo.bar=1 foo.baz=2 will result in {"foo": {"bar": 1, "baz": 2}}"#)]
+    json: Option<Vec<String>>,
+
+    #[arg(long, num_args = 0.., help = "Sets Form body. --form is greedy, so every value after it is treated as a form key/value pair.")]
+    form: Option<Vec<String>>,
+
+    #[arg(short, long, help = "Sets the request method. Defaults to GET. Behaves like curl -X.")]
+    method: Option<String>,
+
+    #[arg(short, long)]
+    verbose: bool,
+
+    #[arg(short, long, help = "By default, req makes an effort to pretty print the results. Right now, we only pretty print JSON.")]
+    raw: bool,
+
+    #[arg(long, help = "Sets header `Authorization: Bearer <value>`.")]
+    bearer: Option<String>,
+
+    #[arg(long, help = "Sets header `Authorization: Token <value>`.")]
+    token: Option<String>,
+
+    #[arg(short, long, help = "Sets user authentication header. Behaves like curl -u. Example: `-u user:pass` provides header `Authorization: Basic $(base64 user:pass)`.")]
+    user: Option<String>,
+
+    #[arg(short = 'H', long, help = "Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")]
+    headers: Vec<String>,
+
+    #[arg(short = 'O', long, help = "Behaves like curl -O. Save the response to a file with the same name as the remote URL.")]
+    remote_name: bool,
+
+    #[arg(short = 'F', long, help = "By default, req follows redirects. This flag disables that behavior.")]
+    no_follow: bool,
+}
+
 
 pub fn split_pair<'a>(pair: &'a str, sep: &[char]) -> Option<(&'a str, &'a str)> {
     let mut iter = pair.splitn(2, sep);
@@ -94,93 +116,9 @@ fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let matches = clap::Command::new(NAME)
-        .version(VERSION)
-        .arg_required_else_help(true)
-        .after_help(
-            examples(vec![
-                ("Plain GET request", "req jsonip.com"),
-                (
-                    "GET request with a URL encoded string",
-                    "req jsonip.com apiKey='foo bar'",
-                ),
-                (
-                    "Sends a POST request with a JSON body.",
-                    "req localhost:5000/signup --json email=test@example.com password=test",
-                ),
-                (
-                    "Sends a JSON POST request with URL params. URL params before --json, JSON body after --json.",
-                    "req localhost:5000/search cache=0 --json query='search query'",
-                ),
-            ])
-                .as_str(),
-        )
-        .arg(Arg::new("headers")
-            .multiple_occurrences(true)
-            .takes_value(true)
-            .long("header")
-            .short('H')
-            .help("Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")
-        )
-        .arg(Arg::new("raw")
-            .takes_value(true)
-            .long("raw")
-            .short('r')
-            .help("By default, req makes an effort to pretty print the results. Right now, we only pretty print JSON. ")
-        )
-        .arg(Arg::new("bearer")
-            .takes_value(true)
-            .long("bearer")
-            .help("Sets header `Authorization: Bearer <value>`.")
-        )
-        .arg(Arg::new("token")
-            .takes_value(true)
-            .long("token")
-            .help("Sets header `Authorization: Token <value>`.")
-        )
-        .arg(Arg::new("remote-name")
-            .short('O')
-            .long("remote-name")
-            .help("Behaves like curl -O. Save the response to a file with the same name as the remote URL.")
-        )
-        .arg(Arg::new("verbose").long("verbose").short('v'))
-        .arg(Arg::new("method")
-            .long("method")
-            .short('m')
-            .takes_value(true)
-            .help("Sets the request method. Defaults to GET. Behaves like curl -X.")
-        )
-        .arg(Arg::new("user")
-            .long("user")
-            .short('u')
-            .takes_value(true)
-            .help("Sets user authentication header. Behaves like curl -u. Example: `-u username:password`. `username:password` is base64-encoded, and header `Authorization: Basic <base64>` is set.")
-        )
-        .arg(Arg::new("url")
-            .required(true)
-            .help("<url> is permissive for valid values. Can be :5000, localhost:3000, https://www.google.com, etc.")
-        )
-        .arg(Arg::new("params")
-            .multiple_occurrences(true)
-            .help("Sets URL query params. It urlencodes the provided values.")
-        )
-        .arg(
-            Arg::new("json")
-                .takes_value(true)
-                .multiple_values(true)
-                .long("json")
-                .help("Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair."),
-        )
-        .arg(
-            Arg::new("form")
-                .takes_value(true)
-                .multiple_values(true)
-                .long("form")
-                .help("Sets form body. --form is greedy, so every value after it is treated as a form key/value pair."),
-        )
-        .get_matches();
+    let cli = Cli::parse();
 
-    let mut url = matches.value_of("url").unwrap().to_string();
+    let mut url = cli.url;
     if !url.starts_with("http") {
         if url.starts_with(":") {
             url = format!("localhost{}", url);
@@ -188,74 +126,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         url = format!("http://{}", url);
     }
 
-    let params = matches
-        .values_of("params")
-        .unwrap_or_default()
-        .map(|v| split_pair(v, &['=', ':']).expect("Params must be in the form of key=value or key:value"))
-        .collect::<Vec<_>>();
+    let params = cli.params
+            .iter()
+            .map(|v| split_pair(v.as_str(), &['=', ':']).expect("Params must be in the form of key=value or key:value"))
+            .collect::<Vec<_>>();
 
-    let mut headers = matches
-        .values_of("headers")
-        .unwrap_or_default()
+    let mut headers = cli.headers
+        .iter()
         .map(|v| split_pair(v, &['=', ':']).expect("Headers must be in the form of key=value or key:value"))
         .map(|(k, v)| (k, Cow::Borrowed(v)))
         .collect::<Vec<_>>();
 
     // Set bearer
-    if let Some(bearer) = matches.value_of("bearer") {
+    if let Some(bearer) = cli.bearer {
         headers.push(("Authorization", Cow::Owned(format!("Bearer {}", bearer))));
     }
 
     // Set token
-    if let Some(token) = matches.value_of("token") {
+    if let Some(token) = cli.token {
         headers.push(("Authorization", Cow::Owned(format!("Token {}", token))));
     }
 
     // Set user
-    if let Some(user) = matches.value_of("user") {
-        let base64 = base64::encode(user);
+    if let Some(user) = cli.user {
+        let base64 = base64::engine::general_purpose::STANDARD.encode(&user);
         headers.push(("Authorization", Cow::Owned(format!("Basic {}", base64))));
     }
 
-    let method = matches
-        .value_of("method")
+    // Set method
+    let method = cli.method
         .map(|v| httpclient::Method::from_str(&v.to_uppercase()).expect("Method must be one of: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, TRACE, CONNECT"))
         .unwrap_or_else(|| {
-            if matches.is_present("json") || matches.is_present("form") {
+            if cli.json.is_some() || cli.form.is_some() {
                 httpclient::Method::POST
             } else {
                 httpclient::Method::GET
             }
         });
 
-    let mut client = httpclient::Client::new(None).with_middleware(FollowRedirectsMiddleware {});
-    if matches.is_present("verbose") {
+    let mut client = httpclient::Client::new(None);
+
+    if !cli.no_follow {
+        client = client.with_middleware(FollowRedirectsMiddleware {});
+    }
+
+    if cli.verbose {
         client = client.with_middleware(VerboseMiddleware {});
     }
+
     let mut builder = client.request(method.clone(), &url);
+
+    // Set params
     for (k, v) in params {
         builder = builder.push_query(&k, &v);
     }
 
-    if let Some(json) = matches.values_of("json") {
-        let obj = build_map(json);
+    // Set Json
+    if let Some(json) = cli.json {
+        let obj = build_map(json.iter().map(|s| s.as_str()));
         builder = builder.push_json(obj);
         if !headers.iter().any(|(h, _)| h.to_lowercase() == "accept") {
             headers.push(("Accept", Cow::Borrowed("application/json")));
         }
     };
 
-    if let Some(form) = matches.values_of("form") {
-        let obj = build_map(form);
+    // Set form
+    if let Some(form) = cli.form {
+        let obj = build_map(form.iter().map(|s| s.as_str()));
         builder = builder.set_body(Body::Text(serde_urlencoded::to_string(&obj).expect("Failed to encode as form-urlencoded.")));
         headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
         headers.push(("Accept", Cow::Borrowed("*/*")));
     };
-    let raw = matches.is_present("raw");
 
+    // Add headers
     builder = builder.headers(headers.clone().iter().map(|(k, v)| (*k, v.as_ref())));
+
+    // Make the request
     let res = builder.send().await.unwrap();
-    if matches.is_present("remote-name") {
+
+    if cli.remote_name {
         let url = httpclient::Uri::from_str(&url).unwrap();
         let filename = std::path::Path::new(url.path())
             .file_name()
@@ -270,7 +219,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|s| s.starts_with("application/json"))
             .unwrap_or(false);
         let mut s = res.text().await.unwrap();
-        if !raw && expect_json {
+        if !cli.raw && expect_json {
             s = s.to_colored_json_auto()?;
         }
         println!("{}", s);

@@ -9,7 +9,7 @@ build:
 alias b := build
 
 run *args:
-    cargo run "$@"
+    cargo run -- "$@"
 alias r := run
 
 release:

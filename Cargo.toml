@@ -2,15 +2,15 @@
 name = "req"
 version = "0.5.6"
 edition = "2021"
-description = "CLI Http Client. Built-in support for building JSON bodies & more."
+description = "Command line http client (like curl). Easier formatting to send JSON bodies, smarter defaults, and more, when compared to curl."
 license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 async-trait = "0.1.52"
-base64 = "0.20.0"
-clap = "3.1.6"
+base64 = "0.21.0"
+clap = { version = "4.0.32", features = ["derive"] }
 colored = "2.0.0"
 serde_urlencoded = "0.7"
 httpclient = "0.10"
