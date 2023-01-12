@@ -105,7 +105,8 @@ fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
         // 1. part=credential, parts=username
         while let Some(part) = parts.next() {
             if parts.peek().is_none() {
-                current.insert(part.to_string(), serde_json::Value::String(value.to_string()));
+                let value = serde_json::from_str(value).unwrap_or(serde_json::Value::String(value.to_string()));
+                current.insert(part.to_string(), value);
             } else {
                 current = current.entry(part.to_string()).or_insert_with(|| serde_json::Value::Object(serde_json::Map::new())).as_object_mut().unwrap();
             }
@@ -240,5 +241,22 @@ mod tests {
         let result = build_map(v.into_iter());
         assert_eq!(result["credential"]["username"], "test@gmail.com");
         assert_eq!(result["credential"]["password"], "foo");
+    }
+
+    #[test]
+    fn test_build_map_bool() {
+        let v = vec![
+            "a=true",
+            "b=abc123",
+            "c={",
+            "d=5",
+            "e=-5.5",
+        ];
+        let result = build_map(v.into_iter());
+        assert_eq!(result["a"], true);
+        assert_eq!(result["b"], "abc123");
+        assert_eq!(result["c"], "{");
+        assert_eq!(result["d"], 5);
+        assert_eq!(result["e"], -5.5);
     }
 }
