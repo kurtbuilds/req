@@ -51,10 +51,10 @@ struct Cli {
     #[arg(help = "Sets URL query params. It urlencodes the provided values.")]
     params: Vec<String>,
 
-    #[arg(long, num_args = 0.., help = r#"Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair. Dots in keys are treated as nested objects. For example, --json foo.bar=1 foo.baz=2 will result in {"foo": {"bar": 1, "baz": 2}}"#)]
+    #[arg(long, num_args = 1.., help = r#"Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair. Dots in keys are treated as nested objects. For example, --json foo.bar=1 foo.baz=2 will result in {"foo": {"bar": 1, "baz": 2}}"#)]
     json: Option<Vec<String>>,
 
-    #[arg(long, num_args = 0.., help = "Sets Form body. --form is greedy, so every value after it is treated as a form key/value pair.")]
+    #[arg(long, num_args = 1.., help = "Sets Form body. --form is greedy, so every value after it is treated as a form key/value pair.")]
     form: Option<Vec<String>>,
 
     #[arg(short, long, help = "Sets the request method. Defaults to GET. Behaves like curl -X.")]
