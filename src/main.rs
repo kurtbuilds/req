@@ -83,6 +83,9 @@ struct Cli {
 
     #[arg(short = 'F', long, help = "By default, req follows redirects. This flag disables that behavior.")]
     no_follow: bool,
+
+    #[arg(long)]
+    file: Option<String>,
 }
 
 
@@ -198,6 +201,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
         headers.push(("Accept", Cow::Borrowed("*/*")));
     };
+
+    if let Some(fpath) = cli.file {
+        let file = fs::read(&fpath).expect("Failed to read file.");
+        builder = builder.header("Content-Length", &file.len().to_string());
+        builder = builder.header("Content-Type", mime_guess::from_path(&fpath).first_or_octet_stream().as_ref());
+        builder = builder.set_body(Body::Bytes(file));
+    }
 
     // Add headers
     builder = builder.headers(headers.clone().iter().map(|(k, v)| (*k, v.as_ref())));

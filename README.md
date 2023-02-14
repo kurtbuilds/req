@@ -65,4 +65,4 @@ Need a feature or have a bug report? Open an issue or a PR.
 
 # Roadmap
 
-- [ ] Flag to upload a file
+- [x] Flag to upload a file

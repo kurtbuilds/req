@@ -17,3 +17,4 @@ httpclient = "0.10"
 serde_json = "1.0.79"
 tokio = { version = "1.17.0", features = ["full"] }
 colored_json = "3.0.1"
+mime_guess = "2.0.4"
