@@ -62,3 +62,7 @@ cargo install --git https://github.com/kurtbuilds/req
 # Contributions
 
 Need a feature or have a bug report? Open an issue or a PR.
+
+# Roadmap
+
+- [ ] Flag to upload a file
