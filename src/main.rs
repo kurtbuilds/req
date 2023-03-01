@@ -120,6 +120,7 @@ fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    sigpipe::reset();
     let cli = Cli::parse();
 
     let mut url = cli.url;

@@ -1,6 +1,6 @@
 [package]
 name = "req"
-version = "0.5.6"
+version = "0.6.0"
 edition = "2021"
 description = "Command line http client (like curl). Easier formatting to send JSON bodies, smarter defaults, and more, when compared to curl."
 license = "MIT"
@@ -18,3 +18,4 @@ serde_json = "1.0.79"
 tokio = { version = "1.17.0", features = ["full"] }
 colored_json = "3.0.1"
 mime_guess = "2.0.4"
+sigpipe = "0.1.3"
