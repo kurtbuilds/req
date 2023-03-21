@@ -1,7 +1,8 @@
 use async_trait::async_trait;
-use httpclient::{Body, Error, Middleware, Request, Response};
+use httpclient::{Body, Error, InMemoryBody, Middleware, Request, Response};
 use httpclient::middleware::Next;
 
+#[derive(Debug)]
 pub struct VerboseMiddleware;
 
 #[async_trait]
@@ -16,12 +17,12 @@ impl Middleware for VerboseMiddleware {
         }
         if !request.body().is_empty() {
             eprintln!("Body:");
-            match request.body().try_clone().unwrap() {
-                Body::Empty => {}
-                Body::Bytes(b) => println!("<{} bytes>", b.len()),
-                Body::Text(s) => println!("{}", s),
+            match request.body() {
+                Body::InMemory(InMemoryBody::Bytes(b)) => println!("<{} bytes>", b.len()),
+                Body::InMemory(InMemoryBody::Empty) => {}
+                Body::InMemory(InMemoryBody::Text(s)) => println!("{}", s),
+                Body::InMemory(InMemoryBody::Json(j)) => println!("{}", serde_json::to_string_pretty(&j).unwrap()),
                 Body::Hyper(_) => {}
-                Body::Json(j) => println!("{}", serde_json::to_string_pretty(&j).unwrap()),
             };
         }
         eprintln!("==========");

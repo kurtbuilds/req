@@ -5,17 +5,16 @@ edition = "2021"
 description = "Command line http client (like curl). Easier formatting to send JSON bodies, smarter defaults, and more, when compared to curl."
 license = "MIT"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 async-trait = "0.1.52"
 base64 = "0.21.0"
-clap = { version = "4.0.32", features = ["derive"] }
+clap = { version = "4.1.8", features = ["derive"] }
 colored = "2.0.0"
 serde_urlencoded = "0.7"
-httpclient = "0.10"
+httpclient = "0.15.1"
 serde_json = "1.0.79"
 tokio = { version = "1.17.0", features = ["full"] }
 colored_json = "3.0.1"
 mime_guess = "2.0.4"
 sigpipe = "0.1.3"
+

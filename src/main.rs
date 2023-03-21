@@ -4,8 +4,8 @@ use std::borrow::Cow;
 use clap::{Parser};
 use colored::Colorize;
 use httpclient::middleware::{FollowRedirectsMiddleware};
-use httpclient::{Body};
-use std::fs;
+use httpclient::{InMemoryBody};
+use std::{fs};
 use std::str::FromStr;
 use base64::Engine;
 use colored_json::ToColoredJson;
@@ -66,6 +66,9 @@ struct Cli {
     #[arg(short, long, help = "By default, req makes an effort to pretty print the results. Right now, we only pretty print JSON.")]
     raw: bool,
 
+    #[arg(long, help = "By default, req will error if it receives a >= 400 status code. This flag turns off that behavior.")]
+    ignore_status: bool,
+
     #[arg(long, help = "Sets header `Authorization: Bearer <value>`.")]
     bearer: Option<String>,
 
@@ -77,6 +80,9 @@ struct Cli {
 
     #[arg(short = 'H', long, help = "Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")]
     headers: Vec<String>,
+
+    #[arg(short = 'c', long = "cookie", num_args = 1.., help = "Set a cookie.")]
+    cookies: Vec<String>,
 
     #[arg(short = 'O', long, help = "Behaves like curl -O. Save the response to a file with the same name as the remote URL.")]
     remote_name: bool,
@@ -118,8 +124,8 @@ fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
     serde_json::Value::Object(map)
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     sigpipe::reset();
     let cli = Cli::parse();
 
@@ -158,6 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         headers.push(("Authorization", Cow::Owned(format!("Basic {}", base64))));
     }
 
+    if !cli.cookies.is_empty() {
+        headers.push(("Cookie", Cow::Owned(cli.cookies.join("; "))));
+    }
+
     // Set method
     let method = cli.method
         .map(|v| httpclient::Method::from_str(&v.to_uppercase()).expect("Method must be one of: GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, TRACE, CONNECT"))
@@ -169,7 +179,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
 
-    let mut client = httpclient::Client::new(None);
+    let mut client = httpclient::Client::new();
 
     if !cli.no_follow {
         client = client.with_middleware(FollowRedirectsMiddleware {});
@@ -183,13 +193,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Set params
     for (k, v) in params {
-        builder = builder.push_query(&k, &v);
+        builder = builder.query(&k, &v);
     }
 
     // Set Json
     if let Some(json) = cli.json {
         let obj = build_map(json.iter().map(|s| s.as_str()));
-        builder = builder.push_json(obj);
+        builder = builder.set_json(obj);
         if !headers.iter().any(|(h, _)| h.to_lowercase() == "accept") {
             headers.push(("Accept", Cow::Borrowed("application/json")));
         }
@@ -198,7 +208,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set form
     if let Some(form) = cli.form {
         let obj = build_map(form.iter().map(|s| s.as_str()));
-        builder = builder.set_body(Body::Text(serde_urlencoded::to_string(&obj).expect("Failed to encode as form-urlencoded.")));
+        builder = builder.body(InMemoryBody::Text(serde_urlencoded::to_string(&obj).expect("Failed to encode as form-urlencoded.")));
         headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
         headers.push(("Accept", Cow::Borrowed("*/*")));
     };
@@ -207,7 +217,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let file = fs::read(&fpath).expect("Failed to read file.");
         builder = builder.header("Content-Length", &file.len().to_string());
         builder = builder.header("Content-Type", mime_guess::from_path(&fpath).first_or_octet_stream().as_ref());
-        builder = builder.set_body(Body::Bytes(file));
+        builder = builder.body(InMemoryBody::Bytes(file));
     }
 
     // Add headers
@@ -215,6 +225,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Make the request
     let res = builder.send().await.unwrap();
+
+    if !cli.ignore_status && !res.status().is_success() {
+        let expect_json = res.headers().get("Content-Type")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.starts_with("application/json"))
+            .unwrap_or(false);
+        let mut s = res.text().await.unwrap();
+        if !cli.raw && expect_json {
+            s = s.to_colored_json_auto().unwrap();
+        }
+        println!("{}", s);
+        std::process::exit(1);
+    }
 
     if cli.remote_name {
         let url = httpclient::Uri::from_str(&url).unwrap();
@@ -232,11 +255,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or(false);
         let mut s = res.text().await.unwrap();
         if !cli.raw && expect_json {
-            s = s.to_colored_json_auto()?;
+            s = s.to_colored_json_auto().unwrap();
         }
         println!("{}", s);
     }
-    Ok(())
 }
 
 #[cfg(test)]
