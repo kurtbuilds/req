@@ -81,7 +81,7 @@ struct Cli {
     #[arg(short = 'H', long, help = "Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")]
     headers: Vec<String>,
 
-    #[arg(short = 'c', long = "cookie", num_args = 1.., help = "Set a cookie.")]
+    #[arg(short = 'c', long = "cookie", help = "Set a cookie.")]
     cookies: Vec<String>,
 
     #[arg(short = 'O', long, help = "Behaves like curl -O. Save the response to a file with the same name as the remote URL.")]
