@@ -200,9 +200,6 @@ async fn main() {
     if let Some(json) = cli.json {
         let obj = build_map(json.iter().map(|s| s.as_str()));
         builder = builder.set_json(obj);
-        if !headers.iter().any(|(h, _)| h.to_lowercase() == "accept") {
-            headers.push(("Accept", Cow::Borrowed("application/json")));
-        }
     };
 
     // Set form
