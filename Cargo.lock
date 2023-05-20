@@ -715,7 +715,7 @@ checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 
 [[package]]
 name = "req"
-version = "0.6.1"
+version = "0.6.2"
 dependencies = [
  "async-trait",
  "base64",
