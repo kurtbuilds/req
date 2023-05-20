@@ -111,7 +111,6 @@ fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
         let (key, value) = pair.split_once(&['=', ':']).unwrap();
         let mut parts = key.split('.').peekable();
         let mut current = &mut map;
-        // 1. part=credential, parts=username
         while let Some(part) = parts.next() {
             if parts.peek().is_none() {
                 let value = serde_json::from_str(value).unwrap_or(serde_json::Value::String(value.to_string()));

@@ -18,10 +18,10 @@ impl Middleware for VerboseMiddleware {
         if !request.body().is_empty() {
             eprintln!("Body:");
             match request.body() {
-                Body::InMemory(InMemoryBody::Bytes(b)) => println!("<{} bytes>", b.len()),
+                Body::InMemory(InMemoryBody::Bytes(b)) => eprintln!("<{} bytes>", b.len()),
                 Body::InMemory(InMemoryBody::Empty) => {}
-                Body::InMemory(InMemoryBody::Text(s)) => println!("{}", s),
-                Body::InMemory(InMemoryBody::Json(j)) => println!("{}", serde_json::to_string_pretty(&j).unwrap()),
+                Body::InMemory(InMemoryBody::Text(s)) => eprintln!("{}", s),
+                Body::InMemory(InMemoryBody::Json(j)) => eprintln!("{}", serde_json::to_string_pretty(&j).unwrap()),
                 Body::Hyper(_) => {}
             };
         }
