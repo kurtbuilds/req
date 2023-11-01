@@ -1,3 +1,4 @@
+use std::io::Read;
 mod middleware;
 
 use std::borrow::Cow;
@@ -51,7 +52,7 @@ struct Cli {
     #[arg(help = "Sets URL query params. It urlencodes the provided values.")]
     params: Vec<String>,
 
-    #[arg(long, num_args = 1.., help = r#"Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair. Dots in keys are treated as nested objects. For example, --json foo.bar=1 foo.baz=2 will result in {"foo": {"bar": 1, "baz": 2}}"#)]
+    #[arg(long, num_args = 1.., help = r#"Sets JSON body. --json is greedy, so every value after it is treated as a json key/value pair. Dots in keys are treated as nested objects. For example, --json foo.bar=1 foo.baz=2 will result in {"foo": {"bar": 1, "baz": 2}}. You can also pass --json - to read json from stdin."#)]
     json: Option<Vec<String>>,
 
     #[arg(long, num_args = 1.., help = "Sets Form body. --form is greedy, so every value after it is treated as a form key/value pair.")]
@@ -197,8 +198,16 @@ async fn main() {
 
     // Set Json
     if let Some(json) = cli.json {
-        let obj = build_map(json.iter().map(|s| s.as_str()));
-        builder = builder.set_json(obj);
+        if json.len() == 1 && json[0] == "-" {
+            let stdin = std::io::stdin();
+            let mut handle = stdin.lock();
+            let mut buf = String::new();
+            handle.read_to_string(&mut buf).expect("Failed to read from stdin.");
+            builder = builder.set_json(serde_json::from_str::<serde_json::Value>(&buf).expect("Failed to parse JSON from stdin."));
+        } else {
+            let obj = build_map(json.iter().map(|s| s.as_str()));
+            builder = builder.set_json(obj);
+        }
     };
 
     // Set form
