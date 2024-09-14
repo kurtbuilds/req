@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use httpclient::{Body, Error, InMemoryBody, Middleware, Request, Response};
+use httpclient::{InMemoryBody, InMemoryRequest, Middleware, ProtocolResult, Response};
 use httpclient::middleware::Next;
 
 #[derive(Debug)]
@@ -7,8 +7,8 @@ pub struct VerboseMiddleware;
 
 #[async_trait]
 impl Middleware for VerboseMiddleware {
-    async fn handle(&self, request: Request, next: Next<'_>) -> Result<Response, Error> {
-        eprintln!("{} {}", request.method(), request.url());
+    async fn handle(&self, request: InMemoryRequest, next: Next<'_>) -> ProtocolResult<Response> {
+        eprintln!("{} {}", request.method(), request.uri());
         if !request.headers().is_empty() {
             eprintln!("Headers:");
         }
@@ -18,11 +18,10 @@ impl Middleware for VerboseMiddleware {
         if !request.body().is_empty() {
             eprintln!("Body:");
             match request.body() {
-                Body::InMemory(InMemoryBody::Bytes(b)) => eprintln!("<{} bytes>", b.len()),
-                Body::InMemory(InMemoryBody::Empty) => {}
-                Body::InMemory(InMemoryBody::Text(s)) => eprintln!("{}", s),
-                Body::InMemory(InMemoryBody::Json(j)) => eprintln!("{}", serde_json::to_string_pretty(&j).unwrap()),
-                Body::Hyper(_) => {}
+                InMemoryBody::Bytes(b) => eprintln!("<{} bytes>", b.len()),
+                InMemoryBody::Empty => {}
+                InMemoryBody::Text(s) => eprintln!("{}", s),
+                InMemoryBody::Json(j) => eprintln!("{}", serde_json::to_string_pretty(&j).expect("Failed to serialize JSON")),
             };
         }
         eprintln!("==========");

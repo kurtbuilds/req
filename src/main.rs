@@ -4,13 +4,15 @@ mod middleware;
 use std::borrow::Cow;
 use clap::{Parser};
 use colored::Colorize;
-use httpclient::middleware::{FollowRedirectsMiddleware};
+use httpclient::middleware::Follow;
 use httpclient::{InMemoryBody};
 use std::{fs};
 use std::str::FromStr;
+use std::sync::Arc;
 use base64::Engine;
 use colored_json::ToColoredJson;
 use middleware::VerboseMiddleware;
+use httpclient::ResponseExt;
 
 static EXAMPLES: &[(&'static str, &'static str)] = &[
     ("Plain GET request", "req jsonip.com"),
@@ -88,6 +90,9 @@ struct Cli {
     #[arg(short = 'O', long, help = "Behaves like curl -O. Save the response to a file with the same name as the remote URL.")]
     remote_name: bool,
 
+    #[arg(short = 'k', long, help = "Behaves like curl -k. Ignore certificate issues.")]
+    insecure: bool,
+
     #[arg(short = 'F', long, help = "By default, req follows redirects. This flag disables that behavior.")]
     no_follow: bool,
 
@@ -122,6 +127,28 @@ fn build_map<'a>(values: impl Iterator<Item=&'a str>) -> serde_json::Value {
         }
     }
     serde_json::Value::Object(map)
+}
+
+struct SkipServerVerification;
+
+impl SkipServerVerification {
+    fn new() -> Self {
+        SkipServerVerification
+    }
+}
+
+impl rustls::client::ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &rustls::Certificate,
+        _intermediates: &[rustls::Certificate],
+        _server_name: &rustls::ServerName,
+        _scts: &mut dyn Iterator<Item = &[u8]>,
+        _ocsp_response: &[u8],
+        _now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        Ok(rustls::client::ServerCertVerified::assertion())
+    }
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -182,11 +209,28 @@ async fn main() {
     let mut client = httpclient::Client::new();
 
     if !cli.no_follow {
-        client = client.with_middleware(FollowRedirectsMiddleware {});
+        client = client.with_middleware(Follow);
     }
 
     if cli.verbose {
         client = client.with_middleware(VerboseMiddleware {});
+    }
+
+    if cli.insecure {
+        use rustls::ClientConfig;
+        let store = rustls::RootCertStore::empty();
+        let mut config = ClientConfig::builder()
+            .with_safe_defaults()
+            .with_root_certificates(store)
+            .with_no_client_auth();
+        let mut dangerous_config = ClientConfig::dangerous(&mut config);
+        dangerous_config.set_certificate_verifier(Arc::new(SkipServerVerification));
+        let https = hyper_rustls::HttpsConnectorBuilder::new()
+            .with_tls_config(config)
+            .https_only()
+            .enable_http1()
+            .build();
+        client = client.with_tls_connector(https)
     }
 
     let mut builder = client.request(method.clone(), &url);
