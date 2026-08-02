@@ -14,6 +14,8 @@ use colored_json::ToColoredJson;
 use middleware::VerboseMiddleware;
 use httpclient::ResponseExt;
 
+static DEFAULT_USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
 static EXAMPLES: &[(&'static str, &'static str)] = &[
     ("Plain GET request", "req jsonip.com"),
     (
@@ -81,6 +83,9 @@ struct Cli {
     #[arg(short, long, help = "Sets user authentication header. Behaves like curl -u. Example: `-u user:pass` provides header `Authorization: Basic $(base64 user:pass)`.")]
     user: Option<String>,
 
+    #[arg(short = 'a', long = "user-agent", help = "Sets the User-Agent header. Behaves like curl -A.")]
+    user_agent: Option<String>,
+
     #[arg(short = 'H', long, help = "Sets a header. Can be used multiple times. Separator can be `:` or `=`. Example: `-H content-type:application/json` or `-H 'accept=*/*'`")]
     headers: Vec<String>,
 
@@ -108,6 +113,11 @@ pub fn split_pair<'a>(pair: &'a str, sep: &[char]) -> Option<(&'a str, &'a str)>
     } else {
         None
     }
+}
+
+
+fn has_header(headers: &[(&str, Cow<str>)], name: &str) -> bool {
+    headers.iter().any(|(k, _)| k.eq_ignore_ascii_case(name))
 }
 
 
@@ -191,6 +201,13 @@ async fn main() {
         headers.push(("Authorization", Cow::Owned(format!("Basic {}", base64))));
     }
 
+    // Set user agent. An explicit -H wins over -a.
+    if let Some(user_agent) = cli.user_agent {
+        if !has_header(&headers, "User-Agent") {
+            headers.push(("User-Agent", Cow::Owned(user_agent)));
+        }
+    }
+
     if !cli.cookies.is_empty() {
         headers.push(("Cookie", Cow::Owned(cli.cookies.join("; "))));
     }
@@ -206,7 +223,7 @@ async fn main() {
             }
         });
 
-    let mut client = httpclient::Client::new();
+    let mut client = httpclient::Client::new().no_default_headers();
 
     if !cli.no_follow {
         client = client.with_middleware(Follow);
@@ -258,8 +275,12 @@ async fn main() {
     if let Some(form) = cli.form {
         let obj = build_map(form.iter().map(|s| s.as_str()));
         builder = builder.body(InMemoryBody::Text(serde_urlencoded::to_string(&obj).expect("Failed to encode as form-urlencoded.")));
-        headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
-        headers.push(("Accept", Cow::Borrowed("*/*")));
+        if !has_header(&headers, "Content-Type") {
+            headers.push(("Content-Type", Cow::Borrowed("application/x-www-form-urlencoded")));
+        }
+        if !has_header(&headers, "Accept") {
+            headers.push(("Accept", Cow::Borrowed("*/*")));
+        }
     };
 
     if let Some(fpath) = cli.file {
@@ -269,8 +290,13 @@ async fn main() {
         builder = builder.body(InMemoryBody::Bytes(file));
     }
 
+    // Only set the default User-Agent if the user didn't provide one.
+    if !has_header(&headers, "User-Agent") {
+        headers.push(("User-Agent", Cow::Borrowed(DEFAULT_USER_AGENT)));
+    }
+
     // Add headers
-    builder = builder.headers(headers.clone().iter().map(|(k, v)| (*k, v.as_ref())));
+    builder = builder.headers(headers.iter().map(|(k, v)| (*k, v.as_ref())));
 
     // Make the request
     let res = builder.send().await.unwrap();
